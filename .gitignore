@@ -1,0 +1,3 @@
+# Aditional ignores
+.vscode/
+*.exe
