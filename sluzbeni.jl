@@ -344,7 +344,7 @@ function check_solution(temple, lamp, mirrors)
     # check if some mirrors intersect
     for (m1, mirror1) ∈ enumerate(mirrors[1:end-1]), (m2, mirror2) ∈ enumerate(mirrors[m1+1:end])
         if segment_segment_intersection(mirror1.s, mirror2.s)
-            println(stderr, "ERROR! Mirrors $m1 & $m2 intersect.")
+            println(stderr, "ERROR! Mirrors $m1 & $(m1 + m2) intersect.")
             finalize(temple, lamp, mirrors)
         end
     end
