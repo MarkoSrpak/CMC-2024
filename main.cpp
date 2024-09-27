@@ -8,17 +8,18 @@
 
 #include "render/Render.h"
 
-int main() {
+int main()
+{
 
     // TEMPLE -----------------------------
-    Temple temple; // Create a constant Temple object
+    Temple temple;              // Create a constant Temple object
     temple.printTempleString(); // Print the temple string
     std::cout << "Block size: " << temple.getBlockSize() << std::endl;
     // ------------------------------------
 
     // Initialize lamp and mirrors
-    Lamp lamp({0, 0}, 0);  // Placeholder initial values for the lamp
-    std::vector<Mirror> mirrors;  // Empty vector to hold mirrors
+    Lamp lamp({0, 0}, 0);        // Placeholder initial values for the lamp
+    std::vector<Mirror> mirrors; // Empty vector to hold mirrors
 
     // Load a solution
     std::vector<std::vector<double>> cmc24_solution = {
@@ -30,28 +31,41 @@ int main() {
         {1.6, 6.2, 2.53},
         {2.2, 14.7, 0.7},
         {8.5, 14.2, 2.325},
-        {8.7, 3.05, 2.525}
-    };
+        {8.7, 3.05, 2.525}};
 
     // Call load_solution to process the solution matrix
     bool success = Validation::load_solution(cmc24_solution, lamp, mirrors);
     // Check if the solution loaded successfully
-    if (!success) {
+    if (!success)
+    {
         std::cerr << "Failed to load the solution!" << std::endl;
     }
 
     success = Validation::check_solution(temple, lamp, mirrors);
 
-    if (!success) {
+    if (!success)
+    {
         std::cerr << "Solution not valid!" << std::endl;
     }
 
     Path path = Validation::raytrace(temple, lamp, mirrors);
 
-    Renderer renderer(800, 600, "Temple Renderer", &temple, &lamp, &mirrors, &path);
+    Renderer renderer(800, 600, "Temple Renderer", &temple, &lamp, &mirrors, &path, 20);
 
     renderer.run();
 
+    /*TODO:
+    kvaliteta slike i brzina mogu se mijenjati sa
+    scale_factorom = 150
+    antialiasingLevel = 15
+    broj točaka koje čine krug = 1001
+    ovo su trenutne vrijednosti koje daju skoro idealan rezultat
 
+    brže vrijednosti su manje scale factor 20 je dosta, aliasing na 0, krug na 36 npr.
+    pozvati public funkciju koja ovo troje postavlja
+
+    TODO: isključiti stvaranje output slike jer nije potrebna
+
+    */
     return 0;
 }

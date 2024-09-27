@@ -11,18 +11,41 @@
 class Renderer
 {
 private:
-    sf::RenderWindow window; // SFML window object
+    sf::RenderWindow window;         // SFML window object
+    sf::RenderTexture renderTexture; // Off-screen render texture
+    sf::ContextSettings settings;
     float scaleFactor;
     Temple *temple;
     Lamp *lamp;                   // Pointer to a Lamp object
     std::vector<Mirror> *mirrors; // Pointer to a list of Mirror objects
     Path *path;                   // Pointer to a Path object
+    bool textureSaved;
 
 public:
     Renderer(int width, int height, const std::string &title, Temple *TemplePtr, Lamp *lampPtr, std::vector<Mirror> *mirrorsPtr, Path *pathPtr, float scale = 20.0f)
-        : window(sf::VideoMode(width, height), title), scaleFactor(scale), temple(TemplePtr), lamp(lampPtr), mirrors(mirrorsPtr), path(pathPtr)
+        : scaleFactor(scale), temple(TemplePtr), lamp(lampPtr), mirrors(mirrorsPtr), path(pathPtr)
     {
+        textureSaved = false;
+
+        // Get the temple size
+        auto templeSize = temple->getSize();
+
+        // Resize the window and render texture based on the temple size
+        int templeWidth = templeSize.first * scaleFactor;
+        int templeHeight = templeSize.second * scaleFactor;
+
+        // Set up context settings for antialiasing
+        settings.antialiasingLevel = 15; // Higher values increase antialiasing quality
+
+        // Create the window with antialiasing settings
+        window.create(sf::VideoMode(templeWidth, templeHeight), title, sf::Style::Default, settings);
         window.setFramerateLimit(60);
+
+        // Create the render texture with antialiasing settings
+        if (!renderTexture.create(templeWidth, templeHeight, settings))
+        {
+            std::cerr << "Failed to create render texture!" << std::endl;
+        }
     }
 
     ~Renderer()
@@ -56,7 +79,8 @@ public:
             dot.setFillColor(sf::Color::Green);
         }
 
-        window.draw(dot); // Draw the dot to the window
+        // Draw the dot to the renderTexture, not the window
+        renderTexture.draw(dot);
     }
 
     // Method to draw a line between two points
@@ -68,7 +92,8 @@ public:
         line[0].color = color; // Set the color of the line
         line[1].color = color; // Set the color of the line
 
-        window.draw(line, 2, sf::Lines); // Draw the line
+        // Draw the line to the renderTexture, not the window
+        renderTexture.draw(line, 2, sf::Lines);
     }
 
     // Method to draw the illuminated area based on the path
@@ -82,10 +107,10 @@ public:
 
             for (const Vector2 &point : path->points)
             {
-                sf::CircleShape lightCircle(halfWidth * scaleFactor);
+                sf::CircleShape lightCircle(halfWidth * scaleFactor, 1001); // DEFAULT JE 30, ali u skripti treba 1001
                 lightCircle.setFillColor(lightColor);
                 lightCircle.setPosition((point.x - halfWidth) * scaleFactor, (point.y - halfWidth) * scaleFactor);
-                window.draw(lightCircle);
+                renderTexture.draw(lightCircle);
             }
 
             // Draw rectangles for the light rays between points
@@ -121,7 +146,7 @@ public:
                     rectangle[j].color = lightColor; // Use the same light color
                 }
 
-                window.draw(rectangle); // Draw the rectangle
+                renderTexture.draw(rectangle); // Draw the rectangle
             }
         }
     }
@@ -144,11 +169,11 @@ private:
             double movementSpeed = 0.03;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
             {
-                lamp->v.y -= movementSpeed; // Move up
+                lamp->v.y += movementSpeed; // Move up
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
             {
-                lamp->v.y += movementSpeed; // Move down
+                lamp->v.y -= movementSpeed; // Move down
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
             {
@@ -160,11 +185,11 @@ private:
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::E))
             {
-                lamp->updateLamp(lamp->v, lamp->angle + movementSpeed); // Rotate right
+                lamp->updateLamp(lamp->v, lamp->angle - movementSpeed); // Rotate right
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
             {
-                lamp->updateLamp(lamp->v, lamp->angle - movementSpeed); // Rotate left
+                lamp->updateLamp(lamp->v, lamp->angle + movementSpeed); // Rotate left
             }
             *path = Validation::raytrace(*temple, *lamp, *mirrors);
         }
@@ -172,12 +197,18 @@ private:
 
     void render()
     {
+        renderTexture.clear(sf::Color(229, 222, 178, 255)); // Clear the texture
+
         drawIlluminatedArea();
 
         if (temple)
         {
             renderTemple(); // Render the temple
         }
+
+        // Count illuminated pixels here, after drawing the illuminated area and temple, but before rendering the lamp and mirrors
+        countIlluminatedPixels();
+
         // Draw the lamp if it's set
         if (lamp)
         {
@@ -201,6 +232,17 @@ private:
                 drawLine(path->points[i], path->points[i + 1], sf::Color::Red); // Draw lines between path points
             }
         }
+        renderTexture.display(); // Update the texture
+        // Create a sprite from the texture to draw it on the window
+        sf::Sprite sprite(renderTexture.getTexture());
+        window.draw(sprite);
+
+        // Save the texture as a PNG if it hasn't been saved yet
+        if (!textureSaved)
+        {
+            saveTextureAsPNG("output.png"); // Save to a file named output.png
+            textureSaved = true;            // Set the flag to true after saving
+        }
     }
 
     // Method to render the entire temple (with blocks)
@@ -222,7 +264,61 @@ private:
         rectangle.setFillColor(sf::Color(128, 122, 120, 255));                             // Color the blocks white
 
         // Draw the rectangle on the window
-        window.draw(rectangle);
+        renderTexture.draw(rectangle);
+    }
+
+    void countIlluminatedPixels()
+    {
+        // Capture the current frame of the render texture
+        const sf::Image &image = renderTexture.getTexture().copyToImage();
+
+        unsigned int illuminatedPixelCount = 0;
+        unsigned int emptyPixelCount = 0;
+        unsigned int totalPixelCount = 0;
+
+        // Loop through each pixel of the image
+        for (unsigned int x = 0; x < image.getSize().x; ++x)
+        {
+            for (unsigned int y = 0; y < image.getSize().y; ++y)
+            {
+                sf::Color pixelColor = image.getPixel(x, y);
+
+                // Check if the pixel is illuminated (i.e., matches the illuminated area color)
+                // Assuming the illuminated color is a light color (e.g., light orange you used for the illuminated area)
+                if (pixelColor != sf::Color(229, 222, 178, 255) && pixelColor != sf::Color(128, 122, 120, 255)) // Compare with the exact light color used in drawIlluminatedArea()
+                {
+                    illuminatedPixelCount++;
+                }
+                if (pixelColor == sf::Color(229, 222, 178, 255))
+                {
+                    emptyPixelCount++;
+                }
+                totalPixelCount++;
+            }
+        }
+
+        unsigned int vacantPixelCount = emptyPixelCount + illuminatedPixelCount;
+
+        // Print first statement
+        std::cerr << "Base plot has " << vacantPixelCount << " vacant of total " << totalPixelCount << " pixels." << std::endl;
+
+        // Print second statement
+        std::cerr << "Your CMC24 score is " << illuminatedPixelCount << " / " << vacantPixelCount
+                  << " = " << (100.0 * illuminatedPixelCount / vacantPixelCount) << " %." << std::endl;
+    }
+
+    void saveTextureAsPNG(const std::string &filename)
+    {
+        // Convert render texture to image
+        sf::Image image = renderTexture.getTexture().copyToImage();
+        if (image.saveToFile(filename))
+        {
+            std::cout << "Texture saved to " << filename << std::endl;
+        }
+        else
+        {
+            std::cerr << "Failed to save texture to " << filename << std::endl;
+        }
     }
 
     void clear()
