@@ -167,11 +167,11 @@ private:
             double movementSpeed = 0.03;
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
             {
-                lamp->v.y += movementSpeed; // Move up
+                lamp->v.y -= movementSpeed; // Move up
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
             {
-                lamp->v.y -= movementSpeed; // Move down
+                lamp->v.y += movementSpeed; // Move down
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
             {
@@ -183,11 +183,11 @@ private:
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::E))
             {
-                lamp->updateLamp(lamp->v, lamp->angle - movementSpeed); // Rotate right
+                lamp->updateLamp(lamp->v, lamp->angle + movementSpeed); // Rotate right
             }
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
             {
-                lamp->updateLamp(lamp->v, lamp->angle + movementSpeed); // Rotate left
+                lamp->updateLamp(lamp->v, lamp->angle - movementSpeed); // Rotate left
             }
             *path = Validation::raytrace(*temple, *lamp, *mirrors);
         }
