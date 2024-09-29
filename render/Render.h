@@ -19,13 +19,11 @@ private:
     Lamp *lamp;                   // Pointer to a Lamp object
     std::vector<Mirror> *mirrors; // Pointer to a list of Mirror objects
     Path *path;                   // Pointer to a Path object
-    bool textureSaved;
 
 public:
     Renderer(int width, int height, const std::string &title, Temple *TemplePtr, Lamp *lampPtr, std::vector<Mirror> *mirrorsPtr, Path *pathPtr, float scale = 20.0f)
         : scaleFactor(scale), temple(TemplePtr), lamp(lampPtr), mirrors(mirrorsPtr), path(pathPtr)
     {
-        textureSaved = false;
 
         // Get the temple size
         auto templeSize = temple->getSize();
@@ -236,13 +234,6 @@ private:
         // Create a sprite from the texture to draw it on the window
         sf::Sprite sprite(renderTexture.getTexture());
         window.draw(sprite);
-
-        // Save the texture as a PNG if it hasn't been saved yet
-        if (!textureSaved)
-        {
-            saveTextureAsPNG("output.png"); // Save to a file named output.png
-            textureSaved = true;            // Set the flag to true after saving
-        }
     }
 
     // Method to render the entire temple (with blocks)
