@@ -7,6 +7,16 @@
 #include "../engine/Validation.h"
 #include <iostream>
 #include <vector>
+#include <imgui.h>
+#include <imgui-SFML.h>
+
+// New structure to hold scoring information
+struct ScoreInfo
+{
+    unsigned int illuminatedCount = 0;
+    unsigned int vacantCount = 0;
+    unsigned int totalCount = 0;
+} scoreInfo;
 
 class Renderer
 {
@@ -25,24 +35,30 @@ public:
         : scaleFactor(scale), temple(TemplePtr), lamp(lampPtr), mirrors(mirrorsPtr), path(pathPtr)
     {
 
-        // Get the temple size
         auto templeSize = temple->getSize();
-
-        // Resize the window and render texture based on the temple size
         int templeWidth = templeSize.first * scaleFactor;
         int templeHeight = templeSize.second * scaleFactor;
 
-        // Set up context settings for antialiasing
-        settings.antialiasingLevel = 15; // Higher values increase antialiasing quality
+        // Increase window width for GUI
+        int guiWidth = 400; // Space for GUI
+        int totalWindowWidth = templeWidth + guiWidth;
 
-        // Create the window with antialiasing settings
-        window.create(sf::VideoMode(templeWidth, templeHeight), title, sf::Style::Default, settings);
+        settings.antialiasingLevel = 0; // Antialiasing setting
+
+        // Create the window with extra width for GUI
+        window.create(sf::VideoMode(totalWindowWidth, templeHeight), title, sf::Style::Default, settings);
         window.setFramerateLimit(60);
 
-        // Create the render texture with antialiasing settings
+        // Create the render texture (without GUI space)
         if (!renderTexture.create(templeWidth, templeHeight, settings))
         {
             std::cerr << "Failed to create render texture!" << std::endl;
+        }
+
+        // Initialize ImGui with the SFML window
+        if (!ImGui::SFML::Init(window))
+        {
+            std::cerr << "Failed to create GUI!" << std::endl;
         }
     }
 
@@ -54,12 +70,17 @@ public:
     // Main loop to handle events and rendering
     void run()
     {
+        sf::Clock deltaClock; // Clock to handle timing for ImGui updates
         while (window.isOpen())
         {
             processEvents(); // Handle user input and window events
             clear();         // Clear the window
             render();        // Render the temple
-            display();       // Display everything on the window
+            ImGui::SFML::Update(window, deltaClock.restart());
+            RenderTextBoxes(*mirrors);
+            renderScoreToGUI();
+            ImGui::SFML::Render(window);
+            display(); // Display everything on the window
         }
     }
 
@@ -155,6 +176,8 @@ private:
         sf::Event event;
         while (window.pollEvent(event))
         {
+            ImGui::SFML::ProcessEvent(event); // Let ImGui process the event
+
             if (event.type == sf::Event::Closed)
             {
                 window.close(); // Close the window if the close button is pressed
@@ -290,12 +313,55 @@ private:
 
         unsigned int vacantPixelCount = emptyPixelCount + illuminatedPixelCount;
 
-        // Print first statement
-        std::cerr << "Base plot has " << vacantPixelCount << " vacant of total " << totalPixelCount << " pixels." << std::endl;
+        // Store the scoring information for later use
+        scoreInfo.illuminatedCount = illuminatedPixelCount;
+        scoreInfo.vacantCount = vacantPixelCount;
+        scoreInfo.totalCount = totalPixelCount;
+    }
 
-        // Print second statement
-        std::cerr << "Your CMC24 score is " << illuminatedPixelCount << " / " << vacantPixelCount
-                  << " = " << (100.0 * illuminatedPixelCount / vacantPixelCount) << " %." << std::endl;
+    void RenderTextBoxes(std::vector<Mirror> &mirrors)
+    {
+        for (int i = 0; i < mirrors.size(); ++i)
+        {
+            ImGui::Text("Mirror %d", i + 1); // Display mirror index (1-based)
+            ImGui::Separator();              // Add a separator line for visual separation
+
+            ImGui::PushID(i); // Unique ID for each mirror
+
+            // Temporary variables to hold current values
+            Vector2 tempPos = mirrors[i].v1;                      // Temporary position
+            double tempAngle = mirrors[i].angle * (180.0 / M_PI); // Temporary angle
+
+            // Input fields for mirror properties
+            ImGui::InputDouble("Mirror X", &tempPos.x); // Input for X coordinate
+            ImGui::InputDouble("Mirror Y", &tempPos.y); // Input for Y coordinate
+            ImGui::InputDouble("Angle", &tempAngle);    // Input for angle
+
+            // Update the mirror properties if any of the inputs change
+            if (tempPos.x != mirrors[i].v1.x || tempPos.y != mirrors[i].v1.y || tempAngle != mirrors[i].angle)
+            {
+                mirrors[i].updateMirror(tempPos, tempAngle * (M_PI / 180.0)); // Call the update function
+            }
+
+            ImGui::PopID();
+        }
+    }
+
+    // Method to render scoring information to the GUI
+    void renderScoreToGUI()
+    {
+        ImGui::Text("Total Pixels: %d", scoreInfo.totalCount);
+        ImGui::Text("Vacant Pixels: %d", scoreInfo.vacantCount);
+        ImGui::Text("Illuminated Pixels: %d", scoreInfo.illuminatedCount);
+        if (scoreInfo.vacantCount > 0)
+        {
+            float scorePercentage = (100.0f * scoreInfo.illuminatedCount / scoreInfo.vacantCount);
+            ImGui::Text("Your CMC24 score: %.2f%%", scorePercentage);
+        }
+        else
+        {
+            ImGui::Text("No vacant pixels available.");
+        }
     }
 
     void saveTextureAsPNG(const std::string &filename)
