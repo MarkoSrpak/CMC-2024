@@ -4,9 +4,12 @@
 #include "engine/Mirror.h"
 #include "engine/Lamp.h"
 #include "engine/Validation.h"
+#include "engine/Solver.h"
 #include <vector>
 
 #include "render/Render.h"
+
+//#define SOLVER
 
 int main()
 {
@@ -20,18 +23,22 @@ int main()
     // Initialize lamp and mirrors
     Lamp lamp({0, 0}, 0);        // Placeholder initial values for the lamp
     std::vector<Mirror> mirrors; // Empty vector to hold mirrors
-
+#ifdef SOLVER
+    Path path;
+    Solver solver(&temple, &lamp, &mirrors, &path, 10);
+    solver.run();
+#else
     // Load a solution
     std::vector<std::vector<double>> cmc24_solution = {
-        {5, 5, 0.26},
-        {11.5, 6.5, 0.9},
-        {11.9, 16.5, 0.95},
-        {15.2, 17.6, 2.45},
-        {13.8, 12.0, 0.92},
-        {1.6, 6.2, 2.53},
-        {2.2, 14.7, 0.7},
-        {8.5, 14.2, 2.325},
-        {8.7, 3.05, 2.525}};
+        {1.0001, 6.71001, 0.345575},
+        {18.6877, 13.0773, 2.18655},
+        {9.16612, 1.42052, 5.98788},
+        {7.44542, 17.4978, 6.13202},
+        {1.01349, 1.62666, 5.57319},
+        {11.1788, 7.81111, 0.82938},
+        {16.4032, 18.3914, 5.42239},
+        {1.01188, 13.456, 1.53938},
+        {18.9533, 6.42186, 1.537635}};
 
     // Call load_solution to process the solution matrix
     bool success = Validation::load_solution(cmc24_solution, lamp, mirrors);
@@ -53,7 +60,7 @@ int main()
     Renderer renderer(800, 600, "Temple Renderer", &temple, &lamp, &mirrors, &path, 20);
 
     renderer.run();
-
+#endif
     /*TODO:
     kvaliteta slike i brzina mogu se mijenjati sa
     scale_factorom = 150
@@ -67,5 +74,20 @@ int main()
     TODO: isključiti stvaranje output slike jer nije potrebna
 
     */
+
+   /*
+   cmc24_solution = [
+        1.0001 6.71001 0.345575;
+        18.6877 13.0773 2.18655;
+        9.16612 1.42052 5.98788;
+        7.44542 17.4978 6.13202;
+        1.01349 1.62666 5.57319;
+        11.1788 7.81111 0.82938;
+        16.4032 18.3914 5.42239;
+        1.01188 13.456 1.53938;
+        18.9533 6.42186 1.537635;
+   ]
+   sluzbeni score 66.31071895424837 %
+   */
     return 0;
 }
