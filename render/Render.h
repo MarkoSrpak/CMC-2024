@@ -29,6 +29,11 @@ private:
     Lamp *lamp;                   // Pointer to a Lamp object
     std::vector<Mirror> *mirrors; // Pointer to a list of Mirror objects
     Path *path;                   // Pointer to a Path object
+    bool isDraggingMirror = false;
+    int selectedMirrorIndex = -1;
+    Vector2 initialOffset;
+    bool isDraggingLamp = false; // Track if the lamp is being dragged
+    Vector2 lampInitialOffset;   // Store the offset from lamp position when dragging starts
 
 public:
     Renderer(int width, int height, const std::string &title, Temple *TemplePtr, Lamp *lampPtr, std::vector<Mirror> *mirrorsPtr, Path *pathPtr, float scale = 20.0f)
@@ -77,6 +82,7 @@ public:
             clear();         // Clear the window
             render();        // Render the temple
             ImGui::SFML::Update(window, deltaClock.restart());
+            RenderLampControls();
             RenderTextBoxes(*mirrors);
             renderScoreToGUI();
             ImGui::SFML::Render(window);
@@ -182,6 +188,69 @@ private:
             {
                 window.close(); // Close the window if the close button is pressed
             }
+
+            // Handle mirror dragging
+            if (event.type == sf::Event::MouseButtonPressed && event.mouseButton.button == sf::Mouse::Left)
+            {
+                sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
+                sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
+
+                // Convert mouse position to world coordinates (account for scale)
+                Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
+
+                // Check if the mouse clicked on a mirror
+                for (int i = 0; i < mirrors->size(); ++i)
+                {
+                    const Mirror &mirror = (*mirrors)[i];
+
+                    // Check if the mouse click is close to the mirror's position
+                    if (isMouseNearMirror(mirror, mouseWorldPos))
+                    {
+                        selectedMirrorIndex = i;
+                        initialOffset = mouseWorldPos - mirror.v1; // Offset to keep the relative position when dragging
+                        isDraggingMirror = true;
+                        break;
+                    }
+                }
+
+                // Check if the mouse clicked on the lamp (similar to mirror)
+                if (lamp && isMouseNearLamp(lamp->v, mouseWorldPos))
+                {
+                    lampInitialOffset = mouseWorldPos - lamp->v; // Offset for dragging
+                    isDraggingLamp = true;                       // Start dragging the lamp
+                }
+            }
+            else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left)
+            {
+                // Stop dragging the mirror when the mouse button is released
+                isDraggingMirror = false;
+                selectedMirrorIndex = -1;
+
+                // Stop dragging the lamp
+                isDraggingLamp = false;
+            }
+        }
+
+        // Handle dragging
+        if (isDraggingMirror && selectedMirrorIndex != -1)
+        {
+            sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
+            sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
+            Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
+            // Update the position of the selected mirror while dragging
+            (*mirrors)[selectedMirrorIndex].v1 = mouseWorldPos - initialOffset;
+            (*mirrors)[selectedMirrorIndex].updateMirror((*mirrors)[selectedMirrorIndex].v1, (*mirrors)[selectedMirrorIndex].angle);
+        }
+
+        // Handle dragging the lamp
+        if (isDraggingLamp && lamp)
+        {
+            sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
+            sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
+            Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
+            // Update the lamp position while dragging
+            lamp->v = mouseWorldPos - lampInitialOffset;
+            lamp->updateLamp(lamp->v, lamp->angle); // Keep the same angle
         }
 
         // Handle WASD movement if lamp is set
@@ -214,6 +283,29 @@ private:
             }
             *path = Validation::raytrace(*temple, *lamp, *mirrors);
         }
+    }
+
+    bool isMouseNearMirror(const Mirror &mirror, const Vector2 &mousePos)
+    {
+        float distanceThreshold = 0.5f; // Threshold distance to consider a click near the mirror
+
+        // Check the distance between the mouse and the mirror's position
+        float distanceToV1 = (mousePos - mirror.v1).magnitude(); // Distance to the first vertex
+        float distanceToV2 = (mousePos - mirror.v2).magnitude(); // Distance to the second vertex
+
+        // Return true if the mouse is near either of the mirror's endpoints
+        return distanceToV1 < distanceThreshold || distanceToV2 < distanceThreshold;
+    }
+
+    bool isMouseNearLamp(const Vector2 &lampPos, const Vector2 &mousePos)
+    {
+        float distanceThreshold = 0.5f; // Adjust this threshold if needed
+
+        // Check the distance between the mouse and the lamp's position
+        float distanceToLamp = (mousePos - lampPos).magnitude(); // Distance to the lamp position
+
+        // Return true if the mouse is near the lamp's position
+        return distanceToLamp < distanceThreshold;
     }
 
     void render()
@@ -344,6 +436,30 @@ private:
             }
 
             ImGui::PopID();
+        }
+    }
+
+    void RenderLampControls()
+    {
+        if (lamp)
+        {
+            ImGui::Text("Lamp Properties");
+            ImGui::Separator();
+
+            // Temporary variables to hold current lamp properties
+            Vector2 tempLampPos = lamp->v;
+            double tempLampAngle = lamp->angle * (180.0 / M_PI); // Convert radians to degrees for easier input
+
+            // Input fields for the lamp's position and angle
+            ImGui::InputDouble("Lamp X", &tempLampPos.x);     // X coordinate input
+            ImGui::InputDouble("Lamp Y", &tempLampPos.y);     // Y coordinate input
+            ImGui::InputDouble("Lamp Angle", &tempLampAngle); // Angle input in degrees
+
+            // If any values have changed, update the lamp's position and angle
+            if (tempLampPos.x != lamp->v.x || tempLampPos.y != lamp->v.y || tempLampAngle != lamp->angle * (180.0 / M_PI))
+            {
+                lamp->updateLamp(tempLampPos, tempLampAngle * (M_PI / 180.0)); // Convert angle back to radians
+            }
         }
     }
 

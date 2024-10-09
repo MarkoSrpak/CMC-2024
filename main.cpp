@@ -9,7 +9,7 @@
 
 #include "render/Render.h"
 
-#define SOLVER
+// #define SOLVER
 
 int main()
 {
