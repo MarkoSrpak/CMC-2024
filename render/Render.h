@@ -34,6 +34,9 @@ private:
     Vector2 initialOffset;
     bool isDraggingLamp = false; // Track if the lamp is being dragged
     Vector2 lampInitialOffset;   // Store the offset from lamp position when dragging starts
+    sf::Clock doubleClickClock;  // To measure the time between clicks
+    bool isMirrorDoubleClicked = false;
+    float doubleClickMaxTime = 0.3f; // 300 ms for double-click
 
 public:
     Renderer(int width, int height, const std::string &title, Temple *TemplePtr, Lamp *lampPtr, std::vector<Mirror> *mirrorsPtr, Path *pathPtr, float scale = 20.0f)
@@ -194,30 +197,47 @@ private:
             {
                 sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
                 sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
-
-                // Convert mouse position to world coordinates (account for scale)
                 Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
 
-                // Check if the mouse clicked on a mirror
                 for (int i = 0; i < mirrors->size(); ++i)
                 {
                     const Mirror &mirror = (*mirrors)[i];
-
-                    // Check if the mouse click is close to the mirror's position
                     if (isMouseNearMirror(mirror, mouseWorldPos))
                     {
-                        selectedMirrorIndex = i;
-                        initialOffset = mouseWorldPos - mirror.v1; // Offset to keep the relative position when dragging
-                        isDraggingMirror = true;
-                        break;
-                    }
-                }
 
-                // Check if the mouse clicked on the lamp (similar to mirror)
-                if (lamp && isMouseNearLamp(lamp->v, mouseWorldPos))
-                {
-                    lampInitialOffset = mouseWorldPos - lamp->v; // Offset for dragging
-                    isDraggingLamp = true;                       // Start dragging the lamp
+                        // Check for double-click timing
+                        if (doubleClickClock.getElapsedTime().asSeconds() < doubleClickMaxTime)
+                        {
+                            // Detected a double click!
+                            isMirrorDoubleClicked = true;
+                            selectedMirrorIndex = i;
+                        }
+                        else
+                        {
+                            // Start the double-click timer
+                            doubleClickClock.restart();
+                            isMirrorDoubleClicked = false; // Reset double-click flag
+                            selectedMirrorIndex = i;
+                            initialOffset = mouseWorldPos - mirror.v1; // Offset to keep the relative position when dragging
+                            isDraggingMirror = true;
+                        }
+                    }
+                    // Check if the mouse clicked on the lamp (similar to mirror)
+                    if (lamp && isMouseNearLamp(lamp->v, mouseWorldPos))
+                    {
+                        lampInitialOffset = mouseWorldPos - lamp->v; // Offset for dragging
+                        isDraggingLamp = true;                       // Start dragging the lamp
+                    }
+                    if (isMirrorDoubleClicked && selectedMirrorIndex != -1)
+                    {
+                        // Find the best angle for the selected mirror
+                        double bestAngle = findBestRotationForMirror((*mirrors)[selectedMirrorIndex]);
+
+                        // Set the mirror's rotation to the best angle found
+                        (*mirrors)[selectedMirrorIndex].updateMirror((*mirrors)[selectedMirrorIndex].v1, bestAngle);
+
+                        isMirrorDoubleClicked = false; // Reset double-click flag
+                    }
                 }
             }
             else if (event.type == sf::Event::MouseButtonReleased && event.mouseButton.button == sf::Mouse::Left)
@@ -229,59 +249,59 @@ private:
                 // Stop dragging the lamp
                 isDraggingLamp = false;
             }
-        }
 
-        // Handle dragging
-        if (isDraggingMirror && selectedMirrorIndex != -1)
-        {
-            sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
-            sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
-            Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
-            // Update the position of the selected mirror while dragging
-            (*mirrors)[selectedMirrorIndex].v1 = mouseWorldPos - initialOffset;
-            (*mirrors)[selectedMirrorIndex].updateMirror((*mirrors)[selectedMirrorIndex].v1, (*mirrors)[selectedMirrorIndex].angle);
-        }
+            // Handle dragging
+            if (isDraggingMirror && selectedMirrorIndex != -1)
+            {
+                sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
+                sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
+                Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
+                // Update the position of the selected mirror while dragging
+                (*mirrors)[selectedMirrorIndex].v1 = mouseWorldPos - initialOffset;
+                (*mirrors)[selectedMirrorIndex].updateMirror((*mirrors)[selectedMirrorIndex].v1, (*mirrors)[selectedMirrorIndex].angle);
+            }
 
-        // Handle dragging the lamp
-        if (isDraggingLamp && lamp)
-        {
-            sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
-            sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
-            Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
-            // Update the lamp position while dragging
-            lamp->v = mouseWorldPos - lampInitialOffset;
-            lamp->updateLamp(lamp->v, lamp->angle); // Keep the same angle
-        }
+            // Handle dragging the lamp
+            if (isDraggingLamp && lamp)
+            {
+                sf::Vector2i mousePixelPosition = sf::Mouse::getPosition(window);
+                sf::Vector2f mouseWorldPosition = window.mapPixelToCoords(mousePixelPosition);
+                Vector2 mouseWorldPos(mouseWorldPosition.x / scaleFactor, mouseWorldPosition.y / scaleFactor);
+                // Update the lamp position while dragging
+                lamp->v = mouseWorldPos - lampInitialOffset;
+                lamp->updateLamp(lamp->v, lamp->angle); // Keep the same angle
+            }
 
-        // Handle WASD movement if lamp is set
-        if (lamp)
-        {
-            double movementSpeed = 0.03;
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+            // Handle WASD movement if lamp is set
+            if (lamp)
             {
-                lamp->v.y -= movementSpeed; // Move up
+                double movementSpeed = 0.03;
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
+                {
+                    lamp->v.y -= movementSpeed; // Move up
+                }
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
+                {
+                    lamp->v.y += movementSpeed; // Move down
+                }
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
+                {
+                    lamp->v.x -= movementSpeed; // Move left
+                }
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
+                {
+                    lamp->v.x += movementSpeed; // Move right
+                }
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::E))
+                {
+                    lamp->updateLamp(lamp->v, lamp->angle + movementSpeed); // Rotate right
+                }
+                if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
+                {
+                    lamp->updateLamp(lamp->v, lamp->angle - movementSpeed); // Rotate left
+                }
+                *path = Validation::raytrace(*temple, *lamp, *mirrors);
             }
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
-            {
-                lamp->v.y += movementSpeed; // Move down
-            }
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
-            {
-                lamp->v.x -= movementSpeed; // Move left
-            }
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
-            {
-                lamp->v.x += movementSpeed; // Move right
-            }
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::E))
-            {
-                lamp->updateLamp(lamp->v, lamp->angle + movementSpeed); // Rotate right
-            }
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Q))
-            {
-                lamp->updateLamp(lamp->v, lamp->angle - movementSpeed); // Rotate left
-            }
-            *path = Validation::raytrace(*temple, *lamp, *mirrors);
         }
     }
 
@@ -306,6 +326,31 @@ private:
 
         // Return true if the mouse is near the lamp's position
         return distanceToLamp < distanceThreshold;
+    }
+
+    double findBestRotationForMirror(Mirror &mirror)
+    {
+        double bestAngle = 0.0f;
+        unsigned int maxScore = 0; // Start with a very low score
+
+        // Loop over 360 possible angles
+        for (double angle = 0; angle < 2 * M_PI; angle += M_PI / 180)
+        {
+            // Set the mirror's angle to the current angle
+            mirror.updateMirror(mirror.v1, angle);
+            *path = Validation::raytrace(*temple, *lamp, *mirrors);
+            render();
+            // std::cout << scoreInfo.illuminatedCount << '\n';
+            if (scoreInfo.illuminatedCount > maxScore)
+            {
+                maxScore = scoreInfo.illuminatedCount;
+                bestAngle = angle; // Keep track of the best angle
+                std::cout << scoreInfo.illuminatedCount << ' ' << bestAngle << '\n';
+            }
+        }
+
+        // Return the best angle found
+        return bestAngle;
     }
 
     void render()
