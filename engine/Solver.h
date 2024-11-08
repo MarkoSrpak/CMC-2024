@@ -63,7 +63,12 @@ public:
     void runGreedy()
     {
         // findMaxLamp(); ovo je za trazenje lampe
-        lamp->updateLamp({1.0001, 6.71001}, 0.345575);
+        // lamp->updateLamp({1.0001, 6.71001}, 0.345575); //ovo je kao best pocetak za lampu
+        // lamp->updateLamp({1.023478, 1.619828}, 0.225575);
+        // lamp->updateLamp({1.044312, 7.347706}, 5.7887603);
+        // lamp->updateLamp({1.023479, 6.738761}, 5.908759997);
+        lamp->updateLamp({11.023478, 11.477104}, 5.24876000564);
+
         *path = Validation::raytrace(*temple, *lamp, mirrors);
         findMaxMirror(0);
         printf("Solved first mirror\n");
@@ -89,11 +94,9 @@ public:
         findMaxMirror(7);
         printf("Solved eight mirror\n");
         *path = Validation::raytrace(*temple, *lamp, mirrors);
-        /*
-                printf("Print all 5 mirrors\n");
-                for(auto mirror : *mirrors){
-                    mirror.printMirrorDetails();
-                }*/
+
+        printf("Print all 8 mirrors\n");
+        printMirrorPositions();
     }
 
     // Main PSO run function
@@ -255,25 +258,25 @@ public:
     {
         Path tempPath;
         Mirror maxMirror({0, 0}, 0);
-        int maxSol = 0;
+        double maxSol = 0;
         mirrors.push_back(maxMirror);
         bool left = false;
         if (path->directions[idx].x < 0)
             left = true;
-        for (Vector2 v = path->points[idx]; left ^ (v < path->points[idx + 1]); v = v + path->directions[idx] * 0.05)
+        for (Vector2 v = path->points[idx]; left ^ (v < path->points[idx + 1]); v = v + path->directions[idx] * 0.2)
         {
-            for (double angle = 0; angle < M_PI * 2; angle += M_PI / 500)
+            for (double angle = 0; angle < M_PI * 2; angle += M_PI / 360)
             {
                 (mirrors)[idx].updateMirror(v - Vector2(0.001, 0.001), angle);
                 tempPath = Validation::raytrace(*temple, *lamp, mirrors);
-                int sol = evaluatePath(tempPath);
+                double sol = evaluatePath(tempPath);
                 if (sol > maxSol)
                 {
                     maxSol = sol;
                     maxMirror = (mirrors)[idx];
                 }
             }
-            printf("%.3lf %.3lf %5d\n", v.x, v.y, maxSol);
+            printf("%.3lf %.3lf %5lf\n", v.x, v.y, maxSol);
         }
         maxMirror.printMirrorDetails();
         (mirrors)[idx] = maxMirror;
@@ -308,7 +311,7 @@ public:
     }
 
     // Method to draw the illuminated area based on the path
-    int evaluatePath(const Path &pathCurr)
+    double evaluatePath(const Path &pathCurr)
     {
         if (&pathCurr)
         {
@@ -370,6 +373,7 @@ public:
             const sf::Image &image = renderTexture.getTexture().copyToImage();
 
             unsigned int illuminatedPixelCount = 0;
+            unsigned int emptyPixelCount = 0;
 
             // Loop through each pixel of the image
             for (unsigned int x = 0; x < image.getSize().x; ++x)
@@ -384,9 +388,13 @@ public:
                     {
                         illuminatedPixelCount++;
                     }
+                    if (pixelColor == sf::Color(229, 222, 178, 255))
+                    {
+                        emptyPixelCount++;
+                    }
                 }
             }
-            return illuminatedPixelCount;
+            return 100.0 * (double)illuminatedPixelCount / (double)(illuminatedPixelCount + emptyPixelCount);
         }
         return 0;
     }
@@ -411,6 +419,30 @@ public:
 
         // Draw the rectangle on the window
         renderTexture.draw(rectangle);
+    }
+
+    void printMirrorPositions() const
+    {
+        std::cout << "std::vector<std::vector<double>> cmc24_solution = {" << std::endl;
+
+        // Print the lamp's position and angle as the first element in the vector
+        std::cout << "    {"
+                  << std::fixed << std::setprecision(6)
+                  << lamp->v.x << ", "
+                  << lamp->v.y << ", "
+                  << lamp->angle << "}," << std::endl;
+
+        // Print each mirror's position and angle as subsequent elements
+        for (size_t i = 0; i < mirrors.size(); ++i)
+        {
+            std::cout << "    {"
+                      << std::fixed << std::setprecision(6)
+                      << mirrors[i].v1.x << ", "
+                      << mirrors[i].v1.y << ", "
+                      << mirrors[i].angle << "}," << std::endl;
+        }
+
+        std::cout << "};" << std::endl;
     }
 };
 
