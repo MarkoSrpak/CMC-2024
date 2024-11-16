@@ -1,5 +1,4 @@
 # Aditional ignores
 .vscode/
 *.exe
-*.png
 *.o
